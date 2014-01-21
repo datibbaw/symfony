@@ -1429,18 +1429,35 @@ class Request
      */
     public function getContent($asResource = false)
     {
-        if (false === $this->content || (true === $asResource && null !== $this->content)) {
+        if (false === $this->content) {
             throw new \LogicException('getContent() can only be called once when using the resource return type.');
         }
 
         if (true === $asResource) {
+            if (null === $this->content) {
+                $resource = fopen('php://input', 'rb');
+            } elseif (is_resource($this->content)) {
+                $resource = $this->content;
+            } else {
+                $resource = fopen('php://memory', 'w+b');
+                if (false === $resource || fwrite($resource, $this->content) !== strlen($this->content)) {
+                    throw new \LogicException('Could not return resource for content');
+                }
+                fseek($resource, 0);
+            }
+
             $this->content = false;
 
-            return fopen('php://input', 'rb');
+            return $resource;
         }
 
         if (null === $this->content) {
             $this->content = file_get_contents('php://input');
+        } elseif (is_resource($this->content)) {
+            $contents = stream_get_contents($this->content);
+            fclose($this->content);
+
+            $this->content = $contents;
         }
 
         return $this->content;
